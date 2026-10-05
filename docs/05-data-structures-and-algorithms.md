@@ -1,6 +1,6 @@
 # UNiSTREAK Data Structures and Algorithms Doc
 
-*Phase deliverable. Builds on the System Design and Database Design docs. Last updated October 3, 2026.*
+*Phase deliverable. Builds on the System Design and Database Design docs. Last updated October 5, 2026.*
 
 ## 1. Overview
 
@@ -13,17 +13,17 @@ Big-O describes how the amount of work grows as the amount of data grows, the sh
 ## 3. Feature-by-Feature Decisions
 
 ### Streak calculation
-**Question**: recompute the streak from a user's full session history on every read, or maintain it as a stored value.
-**Decision**: maintained state, an O(1) read, updated with a small, fixed amount of work only when a session completes.
+**Question**: recompute the streak from a user's full study session history on every read, or maintain it as a stored value.
+**Decision**: maintained state, an O(1) read, updated with a small, fixed amount of work only when a study session completes.
 **Reasoning**: the streak is read constantly, every leaderboard view, every profile check, while history only ever grows. Recomputing from scratch each time is O(n) and gets slower the longer someone uses the app. Paying a small, fixed cost at write time avoids an ever-growing cost at read time.
 
-### Session timing and the heartbeat sequence
-**Question**: does determining a session's outcome require processing every heartbeat received, or just the most recent one.
+### Study session timing and the heartbeat sequence
+**Question**: does determining a study session's outcome require processing every heartbeat received, or just the most recent one.
 **Decision**: maintained state again, two timestamps, not a stored list of every heartbeat. Timer mode needs no heartbeat at all, completion is the server's own clock checked against a pre-known target time.
 **Reasoning**: the actual business rule, any gap under five minutes counts as fully connected, never needs the full history to evaluate, only the latest value, so storing the whole sequence buys nothing.
 
 ### XP milestone lookup
-**Question**: how to map verified session minutes to an XP tier.
+**Question**: how to map verified study session minutes to an XP tier.
 **Decision**: a plain ordered if/else chain, checked top to bottom. A hash table was explicitly considered and rejected.
 **Reasoning**: the actual question being asked is "which range does this fall into," and a hash table only answers "do you have this exact key," a fundamentally different question that happens to also be O(1). Three tiers doesn't justify anything more structured; a sorted list with binary search would only start earning its keep in the dozens of tiers, solving a scale problem that doesn't exist yet.
 
@@ -40,10 +40,10 @@ Big-O describes how the amount of work grows as the amount of data grows, the sh
 ### Rate limiting
 **Question**: a precise sliding-window queue of timestamps, or a simple counter with a reset time.
 **Decision**: the simple counter, accepting a known, low-stakes edge case at the reset boundary.
-**Reasoning**: the cost of that known gap is genuinely small, nobody is harmed, nothing breaks. This is distinct from, for example, trusting client-reported session time, where the simpler option would have enabled real cheating. Same shape of trade-off, different stakes, different answer.
+**Reasoning**: the cost of that known gap is genuinely small, nobody is harmed, nothing breaks. This is distinct from, for example, trusting client-reported study session time, where the simpler option would have enabled real cheating. Same shape of trade-off, different stakes, different answer.
 
-### Session and auth lookup
-**Decision**: a straightforward indexed exact-match lookup, left unembellished since there is no real branching logic or edge case underneath it.
+### Study session and login session lookup
+**Decision**: a straightforward indexed exact-match lookup on `study_sessions.id` and `login_sessions.id`, left unembellished since there is no real branching logic or edge case underneath it.
 
 ## 4. Governing Principle
 

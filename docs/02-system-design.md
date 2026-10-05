@@ -1,6 +1,6 @@
 # UNiSTREAK System Design Doc
 
-*Phase deliverable. Sits between the Requirements and Behavior Spec and the API Design Doc. Last updated October 3, 2026.*
+*Phase deliverable. Sits between the Requirements and Behavior Spec and the API Design Doc. Last updated October 5, 2026.*
 
 ## 1. Overview
 
@@ -8,9 +8,9 @@ System design is the layer of thinking between requirements (what the system mus
 
 ## 2. System Components
 
-- **Client**: the student's browser or phone. Displays sessions, the timer, streaks, and the leaderboard.
-- **Backend server**: the single source of truth. Holds the business rules (session integrity, streak logic, XP calculation) and is the only thing the client is allowed to trust.
-- **Database**: stores users, sessions, streak state, and XP persistently.
+- **Client**: the student's browser or phone. Displays study sessions, the timer, streaks, and the leaderboard.
+- **Backend server**: the single source of truth. Holds the business rules (study session integrity, streak logic, XP calculation, authentication) and is the only thing the client is allowed to trust.
+- **Database**: stores users, login sessions, study sessions, streak state, and XP persistently.
 - **Notification service**: triggers the timer's alarm, including the best-effort locked-screen case.
 - **AI tutor** (future, Should-have tier): an external LLM integration, not part of this phase's design.
 
@@ -24,14 +24,14 @@ A monolith does not inherently mean disorganized code. Past project experience s
 
 **Module boundary test**: a module owns one clear piece of data and responsibility, exposes a small, deliberate set of functions other code goes through to touch it, and can be described in one sentence without needing the word "and" more than once.
 
-**Modules identified**: Auth, Sessions, Streak, XP, Leaderboard, Notifications. Each of these later maps directly onto the domain classes in the OOP/Class Design deliverable.
+**Modules identified**: Auth (Login Sessions), Study Sessions, Streak, XP, Leaderboard, Notifications. Each of these later maps directly onto the domain classes in the OOP/Class Design deliverable.
 
 ## 4. Technology Stack
 
 - **Language**: TypeScript, end to end, frontend and backend both. Chosen to keep one language across the whole system rather than splitting, and because it matches the original UNiSTREAK's stack.
 - **Frontend**: Next.js.
 - **Backend**: Node.js, via Next.js API routes, running as serverless functions.
-- **Database**: PostgreSQL. Chosen over a document-store (NoSQL) database because the data is structured and interrelated, users, sessions, streaks, with real transactional needs, session completion has to update XP and the streak together, safely.
+- **Database**: PostgreSQL. Chosen over a document-store (NoSQL) database because the data is structured and interrelated, users, login sessions, study sessions, streaks, with real transactional needs, study session completion has to update XP and the streak together, safely.
 
 ## 5. Hosting
 

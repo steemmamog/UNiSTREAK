@@ -1,6 +1,6 @@
 # UNiSTREAK Implementation Plan (SDLC)
 
-*Phase deliverable. Builds on the Requirements and Behavior Spec, the System Design discussion, and the API Design Doc. Last updated October 3, 2026.*
+*Phase deliverable. Builds on the Requirements and Behavior Spec, the System Design discussion, and the API Design Doc. Last updated October 5, 2026.*
 
 ## 1. Overview
 
@@ -18,11 +18,11 @@ This document formalizes the Software Development Life Cycle approach for the re
 
 ## 3. Vertical Slice Order
 
-1. **Auth** (login, logout, session cookie), nothing else works without a logged-in user.
-2. **Timer session creation and completion**, the simplest full path through every architectural layer, proven once, end to end.
-3. **Stopwatch mode and heartbeat/reconnect logic**, reuses the pattern proven in slice 2.
-4. **Streak**, triggered off the session-completion event already designed.
-5. **XP**, triggered off the same session-completion event.
+1. **Auth** (login, logout, session cookie backed by `login_sessions`), nothing else works without an authenticated user.
+2. **Timer study session creation and completion**, the simplest full path through every architectural layer, proven once, end to end.
+3. **Stopwatch study mode and heartbeat/reconnect logic**, reuses the pattern proven in slice 2.
+4. **Streak**, triggered off the study session completion event already designed.
+5. **XP**, triggered off the same study session completion event.
 6. **Leaderboard**, depends on XP already existing.
 
 Notifications and rate limiting are layered into whichever slice they naturally belong to as that slice is built, not treated as standalone slices of their own.
@@ -43,7 +43,7 @@ The same steps, repeated for every slice, in order:
 ## 5. Version Control Conventions
 
 - **Branch strategy**: `main` always stays stable and working. Each slice, or sub-piece of a slice, gets its own short-lived branch, merged back via pull request even though this is currently a solo project, since the eventual open-source audience benefits from a clean, reviewable history.
-- **Commit messages**: Conventional Commits format, `type: short description`, for example `feat: add session completion endpoint`, `fix: correct streak reset on uncovered gap`, `chore: initial project structure`.
+- **Commit messages**: Conventional Commits format, `type: short description`, for example `feat: add study session completion endpoint`, `fix: correct streak reset on uncovered gap`, `chore: initial project structure`.
 
 ## 6. Not Yet Decided
 

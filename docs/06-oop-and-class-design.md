@@ -1,24 +1,24 @@
 # UNiSTREAK OOP and Class Design Doc
 
-*Phase deliverable. The last design doc before implementation. Last updated October 3, 2026.*
+*Phase deliverable. The last design doc before implementation. Last updated October 5, 2026.*
 
 ## 1. Overview
 
-This document records how the five OOP pillars and the five SOLID principles were actually applied to design UNiSTREAK's core domain classes, and the one real gap the SOLID check surfaced before it was closed.
+This document records how the five OOP pillars and the five SOLID principles were actually applied to design UNiSTREAK's core domain classes, and how aligning our terminology to `StudySession` (to cleanly isolate domain study sessions from HTTP/auth `LoginSession`) strengthens encapsulation and clarity.
 
 ## 2. OOP Pillars Applied
 
-**Encapsulation**: internal state can only change through methods the owning class exposes, never by outside code reaching in directly. A user's XP only changes through a method the User class exposes; a session's status only changes through `complete()`. This is what protects every traced rule, the once-per-day streak cap, freeze coverage, the reset to one, from being silently bypassed by a stray direct assignment somewhere in the codebase later.
+**Encapsulation**: internal state can only change through methods the owning class exposes, never by outside code reaching in directly. A user's XP only changes through a method the `User` class exposes; a study session's status only changes through `complete()`. This is what protects every traced rule, the once-per-day streak cap, freeze coverage, the reset to one, from being silently bypassed by a stray direct assignment somewhere in the codebase later.
 
-**Abstraction**: callers of `session.complete()` don't need to know about the 30-minute floor, timer versus stopwatch, or how verified minutes get calculated. All of that complexity is hidden behind one simple call.
+**Abstraction**: callers of `studySession.complete()` don't need to know about the 30-minute floor, timer versus stopwatch, or how verified minutes get calculated. All of that complexity is hidden behind one simple call.
 
-**Inheritance**: `TimerSession` and `StopwatchSession` are both genuinely a `Session`, sharing the same core shape, differing only in how completion is determined.
+**Inheritance**: `TimerStudySession` and `StopwatchStudySession` are both genuinely a `StudySession`, sharing the same core shape, differing only in how completion is determined.
 
 **Polymorphism**: calling `.complete()` on either subtype does the right thing for that type, without the caller needing to branch on which kind it is first.
 
-**Composition**: a `User` has a `Streak`, has an `Xp`, has many `Sessions`. None of these are "is-a" relationships, so none of them are modeled with inheritance.
+**Composition**: a `User` has a `Streak`, has an `Xp`, has many `StudySession`s. None of these are "is-a" relationships, so none of them are modeled with inheritance.
 
-**Interfaces**: `Completable` is a contract requiring a `complete()` method, letting `TimerSession` and `StopwatchSession` both promise the same capability while implementing it differently, enforced by the type system rather than hoped for by convention.
+**Interfaces**: `Completable` is a contract requiring a `complete()` method, letting `TimerStudySession` and `StopwatchStudySession` both promise the same capability while implementing it differently, enforced by the type system rather than hoped for by convention.
 
 ## 3. The Class Design
 
@@ -27,7 +27,7 @@ interface Completable {
   complete(): SessionResult;
 }
 
-abstract class Session implements Completable {
+abstract class StudySession implements Completable {
   protected readonly id: string;
   protected readonly userId: string;
   protected readonly startedAt: Date;
@@ -45,7 +45,7 @@ abstract class Session implements Completable {
   abstract complete(): SessionResult;
 }
 
-class TimerSession extends Session {
+class TimerStudySession extends StudySession {
   private readonly targetEndAt: Date;
 
   complete(): SessionResult {
@@ -55,7 +55,7 @@ class TimerSession extends Session {
   }
 }
 
-class StopwatchSession extends Session {
+class StopwatchStudySession extends StudySession {
   complete(): SessionResult {
     // explicit stop with >=30 verified minutes -> completed
     // heartbeat gap past the grace window is resolved before this is even called
@@ -99,9 +99,9 @@ class User {
   private readonly passwordHash: string;
   private readonly streak: Streak;
   private readonly xp: Xp;
-  private readonly sessions: Session[];
+  private readonly studySessions: StudySession[];
 
-  completeSession(session: Session): void {
+  completeStudySession(session: StudySession): void {
     const result = session.complete();
     if (result.verifiedMinutes >= 30) {
       this.xp.award(result.verifiedMinutes);
@@ -115,15 +115,15 @@ class User {
 
 ## 4. SOLID Principles Applied
 
-**Single Responsibility**: `Session` owns lifecycle and timing, `Streak` owns streak math, `Xp` owns XP math, `User` owns identity and coordinates between them. Four jobs, four owners.
+**Single Responsibility**: `StudySession` owns study lifecycle and timing, `Streak` owns streak math, `Xp` owns XP math, `User` owns student identity and coordinates between them. Four jobs, four owners.
 
-**Open/Closed**: a future third session type implements `Completable` and extends `Session`; nothing already written needs to change to allow it.
+**Open/Closed**: a future third study session type implements `Completable` and extends `StudySession`; nothing already written needs to change to allow it.
 
-**Liskov Substitution**: anywhere a `Session` is expected, a `TimerSession` or `StopwatchSession` behaves correctly, no special-casing required, enforced by both returning the same `SessionResult` shape.
+**Liskov Substitution**: anywhere a `StudySession` is expected, a `TimerStudySession` or `StopwatchStudySession` behaves correctly, no special-casing required, enforced by both returning the same `SessionResult` shape.
 
 **Interface Segregation**: `Completable` asks for exactly one method, nothing dragged along that an implementing class doesn't actually need.
 
-**Dependency Inversion**: this one did not hold in the first pass. `User.completeSession` never hardcoded Postgres calls, but nothing in the original design defined how data actually gets saved, or how a notification gets triggered. That gap was real, not cosmetic.
+**Dependency Inversion**: this one did not hold in the first pass. `User.completeStudySession` never hardcoded Postgres calls, but nothing in the original design defined how data actually gets saved, or how a notification gets triggered. That gap was real, not cosmetic.
 
 ## 5. Closing the Dependency Inversion Gap: Repositories
 
@@ -133,37 +133,37 @@ interface UserRepository {
   save(user: User): Promise<void>;
 }
 
-interface SessionRepository {
-  findById(id: string): Promise<Session | null>;
-  save(session: Session): Promise<void>;
+interface StudySessionRepository {
+  findById(id: string): Promise<StudySession | null>;
+  save(session: StudySession): Promise<void>;
 }
 
 interface NotificationService {
   notify(userId: string, message: string): Promise<void>;
 }
 
-class CompleteSessionUseCase {
+class CompleteStudySessionUseCase {
   constructor(
     private users: UserRepository,
-    private sessions: SessionRepository,
+    private studySessions: StudySessionRepository,
     private notifications: NotificationService
   ) {}
 
   async execute(userId: string, sessionId: string): Promise<void> {
     const user = await this.users.findById(userId);
-    const session = await this.sessions.findById(sessionId);
+    const session = await this.studySessions.findById(sessionId);
 
-    user.completeSession(session);
+    user.completeStudySession(session);
 
-    await this.sessions.save(session);
+    await this.studySessions.save(session);
     await this.users.save(user);
   }
 }
 ```
 
-The real implementations, `PostgresUserRepository`, `PostgresSessionRepository`, `PushNotificationService`, only get constructed at the outer edge, the API route handler. `User`, `Session`, `Streak`, and `Xp` never see Postgres or the notification system directly, which is what makes Dependency Inversion actually hold rather than just claimed.
+The real implementations, `PostgresUserRepository`, `PostgresStudySessionRepository`, `PushNotificationService`, only get constructed at the outer edge, the API route handler. `User`, `StudySession`, `Streak`, and `Xp` never see Postgres or the notification system directly, which is what makes Dependency Inversion actually hold rather than just claimed.
 
-This also pays off directly in the Testing phase: an `InMemoryUserRepository` can swap in for `PostgresUserRepository` with zero changes to `CompleteSessionUseCase`, turning every traced streak scenario into a fast, automated test with no real database required.
+This also pays off directly in the Testing phase: an `InMemoryUserRepository` and `InMemoryStudySessionRepository` can swap in for Postgres repositories with zero changes to `CompleteStudySessionUseCase`, turning every traced streak scenario into a fast, automated test with no real database required.
 
 ## 6. Not Yet Decided
 

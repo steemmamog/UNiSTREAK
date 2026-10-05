@@ -1,6 +1,6 @@
 # UNiSTREAK Database Design Doc
 
-*Phase deliverable. Builds on the System Design Doc and feeds the API Design Doc. Last updated October 3, 2026.*
+*Phase deliverable. Builds on the System Design Doc and feeds the API Design Doc. Last updated October 5, 2026.*
 
 ## 1. Overview
 
@@ -8,17 +8,18 @@ This document follows the standard database design sequence: requirements analys
 
 ## 2. Requirements Analysis
 
-What has to be stored, pulled directly from the Requirements Spec and the API contract, not guessed at independently: who a student is, every session they run (timer or stopwatch, its duration, its outcome), their current streak and how it got there, their total XP, and which days a streak freeze was used.
+What has to be stored, pulled directly from the Requirements Spec and the API contract, not guessed at independently: who a student is, their authenticated login sessions, every study session they run (timer or stopwatch, its duration, its outcome), their current streak and how it got there, their total XP, and which days a streak freeze was used.
 
 ## 3. Conceptual Design
 
-Three entities, decided deliberately as three rather than two:
+Four entities, distinguishing authenticated web sessions from gamified study sessions:
 
 - **Users**, one row per student.
-- **Sessions**, one row per study session, many per user.
+- **Login sessions**, one row per active authenticated session token, many per user.
+- **Study sessions**, one row per gamified study session, many per user.
 - **Freeze uses**, one row per day a streak freeze was actually used, many per user.
 
-Users has a one-to-many relationship with both Sessions and Freeze uses.
+Users has a one-to-many relationship with Login sessions, Study sessions, and Freeze uses.
 
 ## 4. Logical Design
 
@@ -33,7 +34,15 @@ Users has a one-to-many relationship with both Sessions and Freeze uses.
 | streak | integer | denormalized, see section 6 |
 | last_counted_date | date, nullable | the once-per-day cap for streak increments |
 
-**Sessions**
+**Login sessions (`login_sessions`)**
+| Column | Type | Notes |
+|---|---|---|
+| id | identifier | primary key (session token) |
+| user_id | identifier | foreign key to Users |
+| created_at | timestamp | creation time |
+| expires_at | timestamp | server-enforced session expiration |
+
+**Study sessions (`study_sessions`)**
 | Column | Type | Notes |
 |---|---|---|
 | id | identifier | primary key |
@@ -45,7 +54,7 @@ Users has a one-to-many relationship with both Sessions and Freeze uses.
 | last_heartbeat_at | timestamp, nullable | stopwatch mode only |
 | status | enum: active, completed, partial, none | |
 
-**Freeze uses**
+**Freeze uses (`freeze_uses`)**
 | Column | Type | Notes |
 |---|---|---|
 | id | identifier | primary key |
@@ -56,12 +65,15 @@ Users has a one-to-many relationship with both Sessions and Freeze uses.
 
 - Index on `users.xp`, supports the leaderboard's top-N query and the "count how many have more XP than me" rank query, both resolved against the same index.
 - Index on `users.email` (lowercase or case-insensitive), supports login and the type-ahead friend search, a prefix query against this index is what makes "starts with" search cheap without a hand-built structure.
-- Index on `sessions.user_id`, supports fetching a user's own session history and the reconnect flow's lookup by session id.
+- Index on `login_sessions.user_id` and `login_sessions.expires_at`, supports fast session token validation and cleanup of expired tokens.
+- Index on `study_sessions.user_id`, supports fetching a user's own study history and the reconnect flow's lookup by study session id.
 - Index on `freeze_uses` (`user_id`, `used_date`), supports counting how many freezes a user has used in the current calendar month.
 
 ## 6. Design Decisions and Trade-offs
 
-**XP and streak are denormalized onto Users, not computed on demand.** Normalization exists to prevent duplicated facts and the update bugs that come from them, neither applies here, XP and streak are computed once, in one place, when a session completes, then read constantly. Computing them fresh on every read would mean an ever-growing O(n) scan through a user's full session history, slower the longer someone uses the app. A maintained value is O(1) to read regardless of history size, which the leaderboard's 30-second freshness rule requires.
+**Distinguishing login sessions from study sessions prevents domain confusion.** A "login session" represents an authentication token and security lifecycle on the web server, whereas a "study session" represents an active or completed period of academic work with timing and gamification rules. Naming the table `study_sessions` and adding `login_sessions` eliminates architectural ambiguity across the codebase.
+
+**XP and streak are denormalized onto Users, not computed on demand.** Normalization exists to prevent duplicated facts and the update bugs that come from them, neither applies here, XP and streak are computed once, in one place, when a study session completes, then read constantly. Computing them fresh on every read would mean an ever-growing O(n) scan through a user's full study session history, slower the longer someone uses the app. A maintained value is O(1) to read regardless of history size, which the leaderboard's 30-second freshness rule requires.
 
 **Streak freezes are tracked as a dated ledger, not a decrementing counter.** A counter needs something to reset it monthly, a scheduled job, a category of infrastructure this project doesn't otherwise have, with its own silent failure mode if it doesn't run. A ledger of dates needs no reset at all, "freezes used this month" is just a count filtered by date range, and last month's freeze stops counting automatically the moment the calendar turns over. This also composes cleanly with the future in-game shop (purchased freezes are just another dated row) without having designed for that feature directly.
 
