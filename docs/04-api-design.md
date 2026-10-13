@@ -14,7 +14,7 @@ This document formalizes the design of UNiSTREAK's REST API, following a deliber
 - As a UNILAG student, I want to see my current streak and remaining freezes, so I can manage my habit without feeling punished by one missed day.
 - As a UNILAG student, I want to see how I rank on the leaderboard, updated quickly, so the competitive element feels real.
 - As a UNILAG student, I want a dropped study session to be recoverable, so a crash or network hiccup doesn't unfairly cost me my streak.
-
+- As a new UNILAG student, I want to sign up with a username, email and password and be logged in straight away, so I can start studying without extra steps.
 ## 3. Scope and Boundaries
 
 **In scope for this phase**: endpoints covering the Must-have tier only: study sessions (timer and stopwatch), streaks, XP, leaderboard, and login session authentication.
@@ -54,9 +54,36 @@ POST /api/v1/auth/login
 <- 401 { "error": { "code": "invalid_credentials", "message": "Email or password is incorrect." } }
 
 POST /api/v1/auth/logout
-<- 204 (no body, deletes row from login_sessions, cookie cleared)
+### Auth
+
 ```
+POST /api/v1/auth/signup
+-> { "username": "...", "email": "...", "password": "..." }
+<- 201 { "id": "usr_123", "username": "...", "email": "..." }   (sets the session cookie; the new student is logged in immediately)
+<- 400 { "error": { "code": "validation_failed", "message": "Sentence naming the first rule that failed." } }
+<- 409 { "error": { "code": "username_taken", "message": "That username is already taken." } }
+<- 409 { "error": { "code": "email_taken", "message": "An account with that email already exists." } }
+
+POST /api/v1/auth/login
+-> { "identifier": "...", "password": "..." }
+<- 200 { "id": "usr_123", "username": "...", "email": "..." }   (sets the session cookie)
+<- 401 { "error": { "code": "invalid_credentials", "message": "Username, email or password is incorrect." } }
+
+POST /api/v1/auth/logout
+<- 204 (no body, cookie cleared)
+```
+
 Normal email and password, no UNILAG-domain restriction.
+
+**Identifier**: `identifier` is a username or an email. If it contains `@` it is treated as an email, otherwise as a username. Usernames cannot contain `@`, so the two can never be confused.
+
+**Rules**: a username is 3 to 20 characters, letters, numbers and underscores only. An email must be a valid address. A password is at least 8 characters and at most 72 bytes, because bcrypt silently ignores anything past 72 bytes. These rules are enforced on the server; the frontend repeats them only so the student gets instant feedback.
+
+**Case**: usernames and emails are compared case-insensitively, so "Stephen" and "stephen" are the same username. How this is stored is decided in the database design.
+
+**Login errors**: an unknown username or email and a wrong password return the same 401 and the same message, so the response never reveals which accounts exist.
+
+**Not in this contract**: Forgot Password. Out of scope for this sprint.
 
 ### Study Sessions
 
@@ -96,9 +123,7 @@ GET /api/v1/me/xp
 ### Leaderboard
 
 ```
-GET /api/v1/leaderboard?limit=20&cursor=...
-<- 200 { "entries": [ { "rank": 1, "userId": "usr_1", "name": "...", "xp": 5200 } ], "nextCursor": "..." }
-
+<- 200 { "entries": [ { "rank": 1, "userId": "usr_1", "username": "...", "xp": 5200 } ], "nextCursor": "..." }
 GET /api/v1/leaderboard/me
 <- 200 { "rank": 42, "xp": 3400 }
 ```
