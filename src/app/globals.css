@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #050505;
+  --color-volt: #fff500;
+  --color-snow: #f8f8fb;
+  --color-mute: #b4b4c3;
+  --color-line: #555565;
+  --color-danger: #ff6b6b;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-snow);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
